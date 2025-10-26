@@ -361,6 +361,9 @@ class OBJModel:
 # 2. модель вращения
 # =========================================================================
 
+# Добавьте эту проверку в метод
+
+
 class SurfaceOfRevolution:
     """Класс для создания фигур вращения"""
 
@@ -370,66 +373,54 @@ class SurfaceOfRevolution:
         Создание фигуры вращения
 
         Args:
-            profile_points: список точек образующей [[x, y], ...]
+            profile_points: список точек образующей [[радиус, высота], ...]
             axis: ось вращения ('x', 'y', 'z')
             segments: количество сегментов
         """
         vertices = []
         faces = []
 
-        # Преобразуем точки профиля в 3D ПРАВИЛЬНО
-        profile_3d = []
-        for point in profile_points:
-            x, y = point
-            if axis == 'x':  # вращение вокруг X
-                # Точка (x,y) -> (0, x, y), вращаем вокруг X
-                profile_3d.append([0, x, y])
-            elif axis == 'y':  # вращение вокруг Y
-                # Точка (x,y) -> (x, 0, y), вращаем вокруг Y
-                profile_3d.append([x, 0, y])
-            elif axis == 'z':  # вращение вокруг Z
-                # Точка (x,y) -> (x, y, 0), вращаем вокруг Z
-                profile_3d.append([x, y, 0])
-
-        angle_step = 360.0 / segments
-
-        # Создаем вершины ПРАВИЛЬНЫМ способом
+        # Простой и понятный способ - создаем вершины вручную
         for i in range(segments + 1):
-            angle = i * angle_step
+            angle = 2 * math.pi * i / segments  # угол в радианах
 
-            for point in profile_3d:
-                # Преобразуем точку в однородные координаты
-                point_h = to_h(point)
-
-                # Применяем матрицу вращения
-                if axis == 'x':
-                    rotated_point = from_h(Rx(angle) @ point_h)
-                elif axis == 'y':
-                    rotated_point = from_h(Ry(angle) @ point_h)
+            for radius, height in profile_points:
+                if axis == 'y':
+                    # Вращение вокруг Y: x = r*cos, z = r*sin, y = h
+                    x = radius * math.cos(angle)
+                    z = radius * math.sin(angle)
+                    y = height
+                    vertices.append([x, y, z])
+                elif axis == 'x':
+                    # Вращение вокруг X: y = r*cos, z = r*sin, x = h
+                    y = radius * math.cos(angle)
+                    z = radius * math.sin(angle)
+                    x = height
+                    vertices.append([x, y, z])
                 elif axis == 'z':
-                    rotated_point = from_h(Rz(angle) @ point_h)
-
-                vertices.append(rotated_point)
+                    # Вращение вокруг Z: x = r*cos, y = r*sin, z = h
+                    x = radius * math.cos(angle)
+                    y = radius * math.sin(angle)
+                    z = height
+                    vertices.append([x, y, z])
 
         print(f"Создано вершин: {len(vertices)}")
-        print("Первые 10 вершин:")
-        for i in range(min(10, len(vertices))):
-            print(f"  {i}: {vertices[i]}")
 
         # Создаем грани
-        profile_len = len(profile_3d)
+        profile_len = len(profile_points)
         for i in range(segments):
             for j in range(profile_len - 1):
-                # Индексы вершин для текущего сегмента
+                # Индексы вершин
                 v1 = i * profile_len + j
-                v2 = i * profile_len + j + 1
-                v3 = ((i + 1) % segments) * profile_len + j + 1  # исправлено: берем по модулю segments
-                v4 = ((i + 1) % segments) * profile_len + j  # исправлено: берем по модулю segments
+                v2 = i * profile_len + (j + 1)
+                v3 = ((i + 1) % (segments + 1)) * profile_len + (j + 1)
+                v4 = ((i + 1) % (segments + 1)) * profile_len + j
 
-                # Два треугольника образуют четырехугольник
+                # Два треугольника
                 faces.append([v1, v2, v3])
                 faces.append([v1, v3, v4])
 
+        print(f"Создано граней: {len(faces)}")
         return Polyhedron(vertices, faces)
 
 # =========================================================================
