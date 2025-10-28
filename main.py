@@ -280,6 +280,40 @@ def wireframe_2d(ax, P: Polyhedron, proj='perspective', f=1.5):
 # ЛАБОРАТОРНАЯ РАБОТА №7
 # =============================================================================
 
+class ScrollableFrame(ttk.Frame):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.canvas = tk.Canvas(self, highlightthickness=0)
+        self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+
+        self.vsb.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        # Контейнер внутри canvas, в который будем паковать контролы
+        self.content = ttk.Frame(self.canvas)
+        self.content_id = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
+
+        # обновляем scrollregion при изменении размера контента
+        def _on_configure(event=None):
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            # растягиваем по ширине
+            self.canvas.itemconfigure(self.content_id, width=self.canvas.winfo_width())
+        self.content.bind("<Configure>", _on_configure)
+
+        # поддержка колесика мыши
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-4>", self._on_mousewheel)  # Linux
+        self.canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+    def _on_mousewheel(self, event):
+        # Windows / Mac / Linux немного по-разному шлют дельту колесика
+        if event.num == 4:
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self.canvas.yview_scroll(1, "units")
+        else:
+            self.canvas.yview_scroll(int(-event.delta/120), "units")
 
 # =========================================================================
 # 1. OBJ файл
@@ -505,8 +539,9 @@ class ModelViewer:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Левая панель - управление
-        control_frame = ttk.Frame(main_frame)
-        control_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        scroll_left = ScrollableFrame(main_frame)
+        scroll_left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        control_frame = scroll_left.content  # дальше всё пакуем в этот content
 
         # 1. Загрузка OBJ модели
         obj_frame = ttk.LabelFrame(control_frame, text="1. Загрузка OBJ модели", padding=10)
@@ -603,18 +638,25 @@ class ModelViewer:
         rot_buttons_frame = ttk.Frame(rotation_frame)
         rot_buttons_frame.pack(fill=tk.X, pady=(5, 0))
 
-        ttk.Button(rot_buttons_frame, text="X+",
-                   command=lambda: self.rotate_model('x', 10)).pack(side=tk.LEFT, expand=True)
-        ttk.Button(rot_buttons_frame, text="X-",
-                   command=lambda: self.rotate_model('x', -10)).pack(side=tk.LEFT, expand=True)
-        ttk.Button(rot_buttons_frame, text="Y+",
-                   command=lambda: self.rotate_model('y', 10)).pack(side=tk.LEFT, expand=True)
-        ttk.Button(rot_buttons_frame, text="Y-",
-                   command=lambda: self.rotate_model('y', -10)).pack(side=tk.LEFT, expand=True)
-        ttk.Button(rot_buttons_frame, text="Z+",
-                   command=lambda: self.rotate_model('z', 10)).pack(side=tk.LEFT, expand=True)
-        ttk.Button(rot_buttons_frame, text="Z-",
-                   command=lambda: self.rotate_model('z', -10)).pack(side=tk.LEFT, expand=True)
+        # Сетка 3x2:  X+  Y+  Z+
+        #             X-  Y-  Z-
+        buttons = [
+            ("X+", lambda: self.rotate_model('x', 10)),
+            ("Y+", lambda: self.rotate_model('y', 10)),
+            ("Z+", lambda: self.rotate_model('z', 10)),
+            ("X-", lambda: self.rotate_model('x', -10)),
+            ("Y-", lambda: self.rotate_model('y', -10)),
+            ("Z-", lambda: self.rotate_model('z', -10)),
+        ]
+
+        for i, (text, cmd) in enumerate(buttons):
+            r, c = divmod(i, 3)
+            b = ttk.Button(rot_buttons_frame, text=text, command=cmd)
+            b.grid(row=r, column=c, padx=4, pady=3, sticky="ew")
+
+        # колонки растягиваются равномерно
+        for c in range(3):
+            rot_buttons_frame.columnconfigure(c, weight=1)
 
         # Масштабирование и перенос
         other_frame = ttk.Frame(transform_frame)
